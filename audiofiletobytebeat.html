@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8">
+    <title>Audio to Compressed Base64 Bytebeat (5s, 8kHz)</title>
+    <style>
+      body { font-family: sans-serif; margin: 2em; }
+      #output { font-family: monospace; background: #f0f0f0; padding: 1em; }
+      #b64 { font-family: monospace; background: #f8f8f8; padding: 1em; }
+    </style>
+  </head>
+<body>
+  <h2>Audio to Base64 Bytebeat String (5s, 8kHz)</h2>
+  <input type="file" id="audiofile" accept=".wav,.mp3"><br>
+  <label>
+    Output sample rate (Hz): 
+    <input type="number" id="outrate" value="8000" min="100" max="8000">
+  </label>
+  <label>
+    Max samples: 
+    <input type="number" id="maxlen" value="40000" min="50" max="40000">
+  </label>
+  <br><br>
+  <button onclick="process()">Convert</button>
+  <p id="status"></p>
+  <b>Base64 string:</b>
+  <pre id="b64"></pre>
+  <b>Bytebeat formula (one expression):</b>
+  <pre id="output"></pre>
+  <script>
+    function process() {
+      const file = document.getElementById('audiofile').files[0];
+      const outRate = parseInt(document.getElementById('outrate').value, 10);
+      const maxLen = parseInt(document.getElementById('maxlen').value, 10);
+      if (!file) return alert('Please select an audio file.');
+      document.getElementById('status').textContent = 'Processing...';
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        audioCtx.decodeAudioData(e.target.result, function(buffer) {
+          const data = buffer.getChannelData(0);
+          const srcRate = buffer.sampleRate;
+          // Downsample
+          const ratio = srcRate / outRate;
+          let samples = [];
+          for (let i = 0; i < maxLen; ++i) {
+            let idx = Math.floor(i * ratio);
+            let v = Math.max(-1, Math.min(1, data[idx] || 0));
+            // Quantize to 6 bits (0..63)
+            let q = Math.round((v + 1) * 31.5);
+            samples.push(q);
+          }
+          // Encode to base64
+          let b64 = "";
+          for (let i = 0; i < samples.length; ++i)
+            b64 += chars[samples[i]];
+          document.getElementById('b64').textContent = b64;
+          // Bytebeat formula
+          let expr = `c="${b64}",128+2*((c.charCodeAt(t%${samples.length})-65)&63)`;
+          document.getElementById('output').textContent = expr;
+          document.getElementById('status').textContent = `Generated base64 string of length ${samples.length}.`;
+        },
+        function() {
+          document.getElementById('status').textContent = 'Error decoding audio.';
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  </script>
+</body>
+</html>
